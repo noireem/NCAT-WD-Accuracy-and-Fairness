@@ -1,0 +1,55 @@
+name: SurveilFair CI
+
+# Run on pushes to dev/main and on PRs to those branches
+on:
+  push:
+    branches: [ "dev", "main" ]
+  pull_request:
+    branches: [ "dev", "main" ]
+
+jobs:
+  build-and-test:
+    # run the same steps across three OSes (matrix)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.11]
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Run fairness CI sample
+        run: python -m src.eval.run_fairness_ci
+
+      - name: Upload fairness metrics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fairness-metrics-${{ runner.os }}
+          path: |
+            ci_samples/metadata_sample.csv
+            ci_samples/preds_sample.csv
