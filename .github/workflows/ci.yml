@@ -1,9 +1,0 @@
-name: SurveilFair CI
-
-# Run on pushes to dev/main and on PRs to those branches
-on:
-  push:
-    branches: [ "dev", "main" ]
-  pull_request:
-    branches: [ "dev", "main" ]
-
