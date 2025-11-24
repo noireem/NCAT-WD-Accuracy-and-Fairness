@@ -1,0 +1,22 @@
+name: NCAT-WD-Accuracy-and-Fairness
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13.5
+  - pip
+  - typer
+  - loguru
+  - tqdm
+  - ipython
+  - jupyterlab
+  - matplotlib
+  - notebook
+  - numpy
+  - pandas
+  - scikit-learn
+  - ruff
+  - pytest
+  - pip:
+    - python-dotenv
+    - mkdocs
+    - -e .
