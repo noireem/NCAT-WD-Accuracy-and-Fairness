@@ -1,0 +1,20 @@
+#========================= YOLOV8 ===============================
+ultraytics == 8.3.0
+torch>= 2.0.0
+torchvision>=0.15.0
+
+#=========== Computer Vision/ Image Processing ==================
+opencv-python>=4.8.0
+pillow>=10.0.0
+numpy=>1.24.0
+scipy>= 1.10.0
+#=============== Data Processing & Visualization ================
+pandas>=2.0.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.15.0
+#================ Notebook Utils ================================
+ipykernel>=6.0.0
+tqdm>=4.65.0 #progress bar for processing videos
+
+
