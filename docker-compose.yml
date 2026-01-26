@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ncat-wdfa
+    volumes:
+      # Mount source code for development (comment out in production)
+      - ./src:/app/src
+      - ./app:/app/app
+      - ./notebooks:/app/notebooks
+      # Mount data directory if you have one
+      # - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Uncomment and adjust if your app runs a web server
+    # ports:
+    #   - "8000:8000"
+    # Restart policy
+    restart: unless-stopped
