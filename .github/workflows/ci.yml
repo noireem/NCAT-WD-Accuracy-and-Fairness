@@ -1,0 +1,46 @@
+name: Infrastructure & Quality CI
+
+# Trigger on pushes to main or pull requests
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # Job 1: Check Python Environment
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint with Flake8
+        run: |
+          # This checks for syntax errors (E9, F63, etc.)
+          # It effectively tests if your folder structure is valid Python
+          flake8 src --count --select=E9,F63,F7,F82 --show-source --statistics
+          # This checks for PEP8 style violations (optional, but professional)
+          flake8 src --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+  # Job 2: Test Docker Build
+  # This ensures your Dockerfile is valid before you ever try to deploy to Azure
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: code-quality # Only run this if the code quality check passes
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Build Docker Image
+        run: docker build . --file Dockerfile --tag fairness-audit:latest
