@@ -5,8 +5,12 @@ FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
 LABEL maintainer="Noire Meyers & Kristopher Jimenez Poston"
 LABEL description="Socio-Technical Audit Environment for YOLOv8"
 
+# Prevent interactive prompts during build
+ARG DEBIAN_FRONTEND=noninteractive
+
 #Syst Dependencies for OpenCV
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tzdata \
     libgl1-mesa-glx \
     libglib2.0-0 \
     git \
