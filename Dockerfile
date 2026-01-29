@@ -1,48 +1,32 @@
-# Multi-stage build for efficient Docker image
-FROM python:3.11-slim as builder
+#Base image being pytorch w/ cuda 
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
 
-# Set working directory
-WORKDIR /app
+#Metadata on container
+LABEL maintainer="Noire Meyers & Kristopher Jimenez Poston"
+LABEL description="Socio-Technical Audit Environment for YOLOv8"
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+#Syst Dependencies for OpenCV
+RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+#  Set the working directory in the container (app)
+WORKDIR /app
+
+#  Copy dependencies first for better caching (improved caching)
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+#  Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Production stage
-FROM python:3.11-slim
-
-# Set working directory
-WORKDIR /app
-
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy Python dependencies from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy application code
+#  Copy the rest of the application code
 COPY . .
 
-# Create non-root user for security
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
+#Output should be going to terminal
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH="${PYTHONPATH}:/app"
 
-# Expose port if needed (adjust based on your app)
-# EXPOSE 8000
-
-# Default command
-CMD ["python", "app/main.py"]
+# Container starts within a shell
+CMD ["python", "tests/test_environment.py"]

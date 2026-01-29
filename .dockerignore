@@ -1,64 +1,13 @@
-# Git
-.git
-.gitignore
-.gitattributes
-
-# Python
-__pycache__
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-.venv
-pip-log.txt
-pip-delete-this-directory.txt
-.pytest_cache/
-.coverage
-htmlcov/
-*.egg-info/
-dist/
-build/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Jupyter
-.ipynb_checkpoints
-*.ipynb
-
-# Documentation
-*.md
-docs/
-
-# CI/CD
-.github/
-.gitlab-ci.yml
-.travis.yml
-.circleci/
-
-# Environment
+#Local Envs
 .env
-.env.local
-.env.*.local
+.venv
+.venv/
 
-# Logs
-*.log
-logs/
+#Git history
+.Git
+.gitignore
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
+#Python cache
+__pycache__/
+*.pyc
 
-# OS
-.DS_Store
-Thumbs.db
