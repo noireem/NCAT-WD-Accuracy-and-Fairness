@@ -1,10 +1,10 @@
-#Connecting Azure Blob to Codebase. When you run "python src/download_data.py --max-blobs #", downloaded frames go to data/raw/ucf-crime...
+#Connecting Azure Blob to Codebase. When you run "python src/data_prep.py --max-blobs #", downloaded frames go to data/raw/ucf-crime...
 import os
 import sys
 from argparse import ArgumentParser
 from pathlib import Path
-from azure.storage.blob import ContainerClient
-from dotenv import load_dotenv
+from azure.storage.blob import ContainerClient # type: ignore
+from dotenv import load_dotenv # type: ignore
 
 # Load environment variables from .env file
 load_dotenv()
