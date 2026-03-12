@@ -1,11 +1,7 @@
-path: data/weapon_detection
-
+path: ../../data/dataset_ninja/ds
 train: images/train
 val: images/val
 
 names:
-  0: weapon
-  1: phone
-  2: umbrella
-  3: wallet
-  4: keys
+  0: gun
+  1: human
