@@ -4,7 +4,7 @@ import os
 # 1. Add the project root to the path so we can import 'src'
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-def test_imports():
+def test_imports(): #commenting this out eventually to see if this cuts on testing time
     """
     Can we import the critical libraries?
     """

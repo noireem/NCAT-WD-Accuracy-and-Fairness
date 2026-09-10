@@ -1,4 +1,6 @@
-data/
+data/external/MSTE
+data/raw/ucf_crime
+data
 runs/
 __pycache__/
 *.pt
