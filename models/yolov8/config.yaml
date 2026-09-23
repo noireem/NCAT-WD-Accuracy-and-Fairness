@@ -5,7 +5,7 @@ data: data.yaml
 azure_blob:
   enabled: true
   prefix: null
-  dest: ../../data/raw/ucf_crime
+  dest: ../../data/intervention
   images_only: true
   max_blobs: null
 epochs: 75

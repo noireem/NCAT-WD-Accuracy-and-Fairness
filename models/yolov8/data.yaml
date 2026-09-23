@@ -1,7 +1,5 @@
-# Labeled detection set used by train.py.
-# UCF-Crime frames ingested from Azure live under ../../data/raw/ucf_crime
-# and are consumed by infer.py, not this yaml.
-path: ../../data/dataset_ninja/ds
+# Intervention dataset ingested from Azure into ../../data/intervention
+path: ../../data/intervention
 train: images/train
 val: images/val
 

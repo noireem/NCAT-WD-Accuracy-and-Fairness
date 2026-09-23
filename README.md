@@ -81,3 +81,83 @@ The focus of this project is evaluating emerging bias within a simulated environ
 This project is also not attempting to optimize surveillance for policing. It’s an audit of existing baseline technologies & highlighting where they could fall short. The end goal is to reduce harm & increase transparency
 We will not be identifying individuals (No FRT), only skin phenotypes
 Privacy Laws prevent access to raw police CCTV. The datasets used in this project rely on what is publicly available & proxy datasets (movies, Youtube, etc.) which acts as a constraint on real world applications
+
+
+## Architechture
+```mermaid
+flowchart TD
+
+subgraph group_data["Data acquisition"]
+  node_data_prep["Dataset download<br/>[data_prep.py]"]
+  node_local_dataset["Interventiondataset"]
+end
+
+subgraph group_baseline["Baseline audit"]
+  node_baseline_infer["Baseline inference"]
+  node_yolo_infer["YOLO inference<br/>[infer.py]"]
+  node_detections["Weapon detections"]
+  node_skin_classify["Skin-tone classification"]
+end
+
+subgraph group_intervention["Training intervention"]
+  node_intervention_data["Intervention dataset<br/>[data.yaml]"]
+  node_distill_train["Distillation training<br/>[train.py]"]
+  node_trained_model["Trained YOLO model"]
+  node_distill_infer["Distilled inference<br/>[infer_and_label.py]"]
+  node_intervention_results["Detections and labels"]
+end
+
+subgraph group_evaluation["Evaluation"]
+  node_fairness["Fairness audit<br/>[fairness_audit.py]"]
+  node_visualization["Bias visualization<br/>[viz.py]"]
+end
+
+node_researcher(("Researcher"))
+node_azure[("Azure Blob")]
+
+node_researcher -->|"starts download"| node_data_prep
+node_azure -->|"serves blobs"| node_data_prep
+node_data_prep -->|"downloads files"| node_local_dataset
+node_local_dataset -->|"provides frames"| node_baseline_infer
+node_baseline_infer -->|"saves flagged frames"| node_detections
+node_local_dataset -->|"provides images"| node_yolo_infer
+node_yolo_infer -->|"writes detections"| node_detections
+node_detections -.->|"identifies detections"| node_skin_classify
+node_skin_classify -.->|"provides tone buckets"| node_fairness
+node_detections -.->|"groups by outcome"| node_fairness
+node_fairness -.->|"summarizes bias"| node_visualization
+node_intervention_data -->|"configures training"| node_distill_train
+node_distill_train -->|"trains student"| node_trained_model
+node_local_dataset -->|"provides images"| node_distill_infer
+node_trained_model -->|"supplies weights"| node_distill_infer
+node_distill_infer -->|"saves detections and labels"| node_intervention_results
+
+click node_data_prep "https://github.com/noireem/ncat-wd-accuracy-and-fairness/blob/main/src/data_prep.py"
+click node_baseline_infer "https://github.com/noireem/ncat-wd-accuracy-and-fairness/blob/main/src/baseline_inference_audit.py"
+click node_yolo_infer "https://github.com/noireem/ncat-wd-accuracy-and-fairness/blob/main/models/yolov8/infer.py"
+click node_skin_classify "https://github.com/noireem/ncat-wd-accuracy-and-fairness/blob/main/src/skin_tone_classify.py"
+click node_fairness "https://github.com/noireem/ncat-wd-accuracy-and-fairness/blob/main/src/fairness_audit.py"
+click node_visualization "https://github.com/noireem/ncat-wd-accuracy-and-fairness/blob/main/src/viz.py"
+click node_intervention_data "https://github.com/noireem/ncat-wd-accuracy-and-fairness/blob/main/models/yolov8/data.yaml"
+click node_distill_train "https://github.com/noireem/ncat-wd-accuracy-and-fairness/blob/main/models/yolov8/train.py"
+click node_distill_infer "https://github.com/noireem/ncat-wd-accuracy-and-fairness/blob/main/scripts/infer_and_label.py"
+
+classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+class node_data_prep,node_local_dataset toneBlue
+class node_baseline_infer,node_yolo_infer,node_detections,node_skin_classify,node_azure toneAmber
+class node_intervention_data,node_distill_train,node_trained_model,node_distill_infer,node_intervention_results toneMint
+class node_fairness,node_visualization toneRose
+class node_researcher toneIndigo
+```
+
+
+
+## Set-up: Inferencing
+
+### Smoke test

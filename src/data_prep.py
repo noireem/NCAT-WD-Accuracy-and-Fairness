@@ -1,4 +1,4 @@
-"""Download UCF-Crime images from Azure Blob Storage.
+"""Download intervention-dataset images from Azure Blob Storage.
 
 Run:
     python src/data_prep.py --max-blobs 20
@@ -14,38 +14,43 @@ from azure.storage.blob import ContainerClient
 from dotenv import load_dotenv
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DEST = REPO_ROOT / "data" / "raw" / "ucf_crime"
+DEFAULT_DEST = REPO_ROOT / "data" / "intervention"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
-UCF_CLASS_FOLDERS = {
-    "Abuse",
-    "Arrest",
-    "Arson",
-    "Assault",
-    "Burglary",
-    "Explosion",
-    "Fighting",
-    "RoadAccidents",
-    "Robbery",
-    "Shooting",
-    "Shoplifting",
-    "Stealing",
-    "Vandalism",
-}
+LABEL_EXTS = {".txt", ".json", ".yaml", ".yml", ".xml"}
+SAS_ENV_VARS = (
+    "INTERVENTION_DATASET_SAS_URL",
+    "AZURE_BLOB_SAS_URL",
+)
 
 load_dotenv(REPO_ROOT / ".env")
 
 
+def get_sas_url() -> str:
+    for name in SAS_ENV_VARS:
+        value = (os.getenv(name) or "").strip()
+        if value:
+            return value
+    raise RuntimeError(
+        "Missing Azure SAS URL. Set INTERVENTION_DATASET_SAS_URL in .env "
+        "to the interventiondataset container SAS URL."
+    )
+
+
 def get_container() -> ContainerClient:
-    sas_url = os.getenv("UCF_CRIME_SAS_URL")
-    if not sas_url:
-        raise RuntimeError(
-            "Missing UCF_CRIME_SAS_URL in .env. Add the Azure container SAS URL."
-        )
-    return ContainerClient.from_container_url(sas_url)
+    return ContainerClient.from_container_url(
+        get_sas_url(),
+        connection_timeout=20,
+        retry_total=2,
+    )
 
 
 def is_image_blob(name: str) -> bool:
     return Path(name).suffix.lower() in IMAGE_EXTS
+
+
+def is_dataset_blob(name: str) -> bool:
+    suffix = Path(name).suffix.lower()
+    return suffix in IMAGE_EXTS or suffix in LABEL_EXTS
 
 
 def download_blobs(
@@ -64,17 +69,21 @@ def download_blobs(
         print(f"Failed to connect to Azure: {exc}")
         return 0
 
-    print("Connected to Azure Blob. Scanning for files...")
+    print("Connected to Azure Blob (intervention dataset). Scanning for files...")
     downloaded = 0
     skipped = 0
     scanned = 0
+    matched = 0
 
     for blob in container.list_blobs(name_starts_with=prefix):
         scanned += 1
-        if images_only and not is_image_blob(blob.name):
+        keep = is_image_blob(blob.name) if images_only else is_dataset_blob(blob.name)
+        if not keep:
             continue
-        if max_blobs is not None and downloaded >= max_blobs:
-            print(f"Reached limit of {max_blobs} new files.")
+
+        matched += 1
+        if max_blobs is not None and matched > max_blobs:
+            print(f"Reached limit of {max_blobs} matching files.")
             break
 
         target_path = dest_dir / blob.name
@@ -87,30 +96,32 @@ def download_blobs(
             stream = container.download_blob(blob)
             target_path.write_bytes(stream.readall())
             downloaded += 1
-            if downloaded % 50 == 0:
-                print(f"Downloaded {downloaded} new files...")
+            print(f"Downloaded {blob.name}")
         except Exception as exc:
             print(f"Failed to download {blob.name}: {exc}")
 
     print(
-        f"Scan complete. scanned={scanned} downloaded={downloaded} skipped_existing={skipped}"
+        f"Scan complete. scanned={scanned} matched={matched} "
+        f"downloaded={downloaded} skipped_existing={skipped}"
     )
     return downloaded
 
 
 def resolve_image_root(dest_dir: Path) -> Path:
-    """Pick the folder that actually holds classed UCF frames."""
+    """Pick the folder that actually holds downloaded images."""
     dest_dir = Path(dest_dir)
     candidates = [
+        dest_dir / "images" / "train",
+        dest_dir / "images" / "val",
+        dest_dir / "images",
+        dest_dir / "train",
         dest_dir / "Train",
-        dest_dir / "archive (4)" / "Train",
         dest_dir,
     ]
     for candidate in candidates:
-        if not candidate.is_dir():
-            continue
-        class_dirs = [p for p in candidate.iterdir() if p.is_dir() and p.name in UCF_CLASS_FOLDERS]
-        if class_dirs:
+        if candidate.is_dir() and any(
+            f.is_file() and f.suffix.lower() in IMAGE_EXTS for f in candidate.rglob("*")
+        ):
             return candidate
     return dest_dir
 
@@ -125,46 +136,47 @@ def collect_images(
         return []
 
     excluded = excluded_subfolders or set()
-    sources: list[Path] = []
-
     if root.is_file() and root.suffix.lower() in IMAGE_EXTS:
         return [root.resolve()]
 
-    subfolders = target_subfolders or UCF_CLASS_FOLDERS
-    found_class_dir = False
-    for sub in sorted(subfolders):
-        if sub in excluded:
-            continue
-        sub_dir = root / sub
-        if not sub_dir.is_dir():
-            continue
-        found_class_dir = True
-        sources.extend(
-            f.resolve()
-            for f in sorted(sub_dir.rglob("*"))
-            if f.is_file() and f.suffix.lower() in IMAGE_EXTS
-        )
+    if target_subfolders:
+        sources: list[Path] = []
+        found_class_dir = False
+        for sub in sorted(target_subfolders):
+            if sub in excluded:
+                continue
+            sub_dir = root / sub
+            if not sub_dir.is_dir():
+                continue
+            found_class_dir = True
+            sources.extend(
+                f.resolve()
+                for f in sorted(sub_dir.rglob("*"))
+                if f.is_file() and f.suffix.lower() in IMAGE_EXTS
+            )
+        if found_class_dir:
+            return sources
 
-    if not found_class_dir:
-        sources.extend(
-            f.resolve()
-            for f in sorted(root.rglob("*"))
-            if f.is_file()
-            and f.suffix.lower() in IMAGE_EXTS
-            and not any(part in excluded for part in f.parts)
-        )
-    return sources
+    return [
+        f.resolve()
+        for f in sorted(root.rglob("*"))
+        if f.is_file()
+        and f.suffix.lower() in IMAGE_EXTS
+        and not any(part in excluded for part in f.parts)
+    ]
 
 
 def main() -> None:
-    parser = ArgumentParser(description="Download UCF-Crime images from Azure Blob Storage")
-    parser.add_argument("--prefix", default=None, help="Filter by folder (e.g. 'Robbery/' or 'Train/')")
-    parser.add_argument("--max-blobs", type=int, default=None, help="Limit number of new downloads")
+    parser = ArgumentParser(
+        description="Download intervention-dataset images from Azure Blob Storage"
+    )
+    parser.add_argument("--prefix", default=None, help="Filter by folder prefix")
+    parser.add_argument("--max-blobs", type=int, default=None, help="Limit matching files")
     parser.add_argument("--dest", type=Path, default=DEFAULT_DEST, help="Local destination folder")
     parser.add_argument(
         "--all-files",
         action="store_true",
-        help="Download every blob, including videos. Default is images only.",
+        help="Also download label/metadata files. Default is images only.",
     )
     args = parser.parse_args()
 
