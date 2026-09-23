@@ -9,6 +9,7 @@ soft predictions (classification KL-div + box smooth-L1).
 from __future__ import annotations
 
 import argparse
+import sys
 
 from pathlib import Path
 
@@ -165,12 +166,43 @@ class DistillationTrainer(DetectionTrainer):
 # Entry point
 # ---------------------------------------------------------------------------
 
-def train_yolov8(config_path: str, resume: bool | str = False):
+def ingest_azure_images(cfg: dict, base_dir: Path) -> Path | None:
+    """Pull new image blobs from Azure before training when enabled in config.yaml."""
+    azure = cfg.get("azure_blob") or {}
+    if not azure or not azure.get("enabled", False):
+        return None
+
+    repo_root = base_dir.parents[1]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    from src.data_prep import DEFAULT_DEST, download_blobs
+
+    dest_value = azure.get("dest")
+    dest = Path(dest_value) if dest_value else DEFAULT_DEST
+    if not dest.is_absolute():
+        dest = Path(_resolve_path(base_dir, str(dest)))
+
+    print(f"[azure] ingesting images into {dest}")
+    downloaded = download_blobs(
+        prefix=azure.get("prefix"),
+        max_blobs=azure.get("max_blobs"),
+        dest_dir=dest,
+        images_only=bool(azure.get("images_only", True)),
+    )
+    print(f"[azure] new images downloaded: {downloaded}")
+    return dest
+
+
+def train_yolov8(config_path: str, resume: bool | str = False, skip_azure: bool = False):
     config_file = Path(config_path).resolve()
     base_dir = config_file.parent
     with config_file.open("r", encoding="utf-8") as cfg_f:
         cfg = yaml.safe_load(cfg_f)
 
+    if skip_azure:
+        print("[azure] skipped (--skip-azure)")
+    else:
+        ingest_azure_images(cfg, base_dir)
     data_yaml = _resolve_path(base_dir, cfg.get("data"), base_dir / "data.yaml")
     teacher_weights = _resolve_path(base_dir, cfg.get("teacher_model"))
     if not teacher_weights:
@@ -232,6 +264,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Display training progress in the terminal.",
     )
+    parser.add_argument(
+        "--skip-azure",
+        action="store_true",
+        help="Skip Azure Blob ingest and train from local files only.",
+    )
     args = parser.parse_args()
 
     if args.show_progress:
@@ -239,4 +276,4 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO, format="%(message)s")
         logging.getLogger("ultralytics").setLevel(logging.INFO)
 
-    train_yolov8(args.cfg, resume=args.resume)
+    train_yolov8(args.cfg, resume=args.resume, skip_azure=args.skip_azure)

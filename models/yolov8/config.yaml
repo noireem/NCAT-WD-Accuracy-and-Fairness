@@ -2,7 +2,12 @@ task: detect
 model: yolov8n.pt
 teacher_model: ../../runs/detect/train13/weights/best.pt
 data: data.yaml
-dataset_url: https://drive.google.com/drive/folders/1JkrofKsIqaIjhham4fHx9ba0hxHar76p?usp=sharing
+azure_blob:
+  enabled: true
+  prefix: null
+  dest: ../../data/raw/ucf_crime
+  images_only: true
+  max_blobs: null
 epochs: 75
 imgsz: 640
 batch: 16

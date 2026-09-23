@@ -1,27 +1,29 @@
+"""Run YOLOv8 inference on intervention-dataset images ingested from Azure Blob."""
+
+from __future__ import annotations
+
+import argparse
 import json
+import sys
 from pathlib import Path
+
 from ultralytics import YOLO
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
-TARGET_SUBFOLDERS = {
-    "Abuse",
-    "Arrest",
-    "Arson",
-    "Assault",
-    "Burglary",
-    "Explosion",
-    "Fighting",
-    "RoadAccidents",
-    "Robbery",
-    "Shooting",
-    "Shoplifting",
-    "Stealing",
-    "Vandalism",
-}
-MAX_IMAGES = 0  # 0 = all images
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.data_prep import (  # noqa: E402
+    DEFAULT_DEST,
+    collect_images,
+    download_blobs,
+    resolve_image_root,
+)
+
 RESUME_LOG = "infer_processed.txt"
 GUN_CLASS_ID = 0
 GUN_OUTPUT = "gun_detections.jsonl"
+DEFAULT_WEIGHTS = REPO_ROOT / "models" / "weights" / "yolo_v8_baseline.pt"
 
 
 def detect_objects(
@@ -30,31 +32,24 @@ def detect_objects(
     conf: float = 0.7,
     target_class_id: int = GUN_CLASS_ID,
     output_path: str = GUN_OUTPUT,
+    max_images: int = 0,
+    resume_log: str = RESUME_LOG,
 ):
     model = YOLO(weights_path)
 
     path = Path(image_path)
-    sources = []
     processed_set = set()
-    log_path = Path(RESUME_LOG)
+    log_path = Path(resume_log)
     if log_path.exists():
         processed_set = {p.strip() for p in log_path.read_text().splitlines() if p.strip()}
 
     if path.is_dir():
-        for sub in TARGET_SUBFOLDERS:
-            sub_dir = path / sub
-            if not sub_dir.exists():
-                continue
-            sources.extend(
-                str(f)
-                for f in sorted(sub_dir.rglob("*"))
-                if f.is_file() and f.suffix.lower() in IMAGE_EXTS
-            )
+        sources = [str(p) for p in collect_images(path)]
     else:
         sources = [str(path)]
 
-    if MAX_IMAGES > 0:
-        sources = sources[:MAX_IMAGES]
+    if max_images > 0:
+        sources = sources[:max_images]
 
     detections = []
     failed = 0
@@ -62,6 +57,8 @@ def detect_objects(
     output_file = Path(output_path)
     if output_file.exists():
         output_file.unlink()
+
+    print(f"Images queued: {len(sources)}")
     for source in sources:
         if source in processed_set:
             continue
@@ -84,6 +81,7 @@ def detect_objects(
             processed += 1
             with log_path.open("a", encoding="utf-8") as log_file:
                 log_file.write(f"{source}\n")
+            print(f"Inferred {Path(source).name}")
         except Exception as exc:
             failed += 1
             print(f"Skipped {source} due to error: {exc}")
@@ -91,21 +89,61 @@ def detect_objects(
     print(f"Processed: {processed}, Failed: {failed}")
     print(f"Gun detections: {len(detections)}")
     print(f"Saved gun detections to: {output_file}")
-
     return detections
 
 
-if __name__ == "__main__":
-    repo_root = Path(__file__).resolve().parents[2]
-    image_path = repo_root / "data" / "raw" / "ucf_crime" / "archive (4)" / "Train"
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Ingest intervention-dataset images from Azure, then run YOLOv8."
+    )
+    parser.add_argument(
+        "--dest",
+        default=str(DEFAULT_DEST),
+        help="Local cache for Azure images (default: data/intervention).",
+    )
+    parser.add_argument("--prefix", default=None, help="Optional blob prefix.")
+    parser.add_argument("--max-blobs", type=int, default=None, help="Limit Azure files to consider.")
+    parser.add_argument("--max-images", type=int, default=0, help="Limit inference images. 0 = all.")
+    parser.add_argument(
+        "--skip-download",
+        action="store_true",
+        help="Use images already on disk; do not contact Azure.",
+    )
+    parser.add_argument(
+        "--weights",
+        default=str(DEFAULT_WEIGHTS),
+        help="Path to YOLOv8 weights.",
+    )
+    parser.add_argument("--conf", type=float, default=0.5, help="Confidence threshold.")
+    parser.add_argument("--output", default=GUN_OUTPUT, help="JSONL path for gun detections.")
+    args = parser.parse_args()
 
+    dest = Path(args.dest)
+    if not args.skip_download:
+        print(f"Ingesting intervention-dataset images from Azure into {dest} ...")
+        downloaded = download_blobs(
+            prefix=args.prefix,
+            max_blobs=args.max_blobs,
+            dest_dir=dest,
+            images_only=True,
+        )
+        print(f"New images downloaded: {downloaded}")
+
+    image_root = resolve_image_root(dest)
+    print(f"Running inference on: {image_root}")
     detections = detect_objects(
-        image_path=str(image_path),
-        weights_path="runs/detect/train13/weights/best.pt",
-        conf=0.5,
+        image_path=str(image_root),
+        weights_path=args.weights,
+        conf=args.conf,
+        output_path=args.output,
+        max_images=args.max_images,
     )
 
-    for d in detections[:20]:
-        print(d)
+    for detection in detections[:20]:
+        print(detection)
     if len(detections) > 20:
         print(f"Showing first 20 of {len(detections)} gun detections.")
+
+
+if __name__ == "__main__":
+    main()
