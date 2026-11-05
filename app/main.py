@@ -4,8 +4,12 @@
 "Audit is just checking it's validity in a real world context"
 "- Finish Configuring Label Studio"
 "- Fetch Data from the internet & integrate to Azure Blob"
+"add to this for ease of use"
 "- Annontate Data with Label Studio"
 "- Train Model"
 "Audit Model"
 "Report Results"
 ""
+
+
+
